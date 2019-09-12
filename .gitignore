@@ -12,3 +12,5 @@ leelaz_opencl_tuning
 /build-validation-*
 .vs/
 build/
+.venv/
+.idea/

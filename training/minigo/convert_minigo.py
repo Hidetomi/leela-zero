@@ -14,9 +14,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # or any {'0', '1', '2'}
 def matches(name, parts):
     return all(part in name for part in parts)
 
+
 def deduped(names):
     names = [re.sub('_\d+', '', name) for name in names]
     return sorted([(n, names.count(n)) for n in set(names)])
+
 
 def getMinigoWeightsV1(model):
     """Load and massage Minigo weights to Leela format.
@@ -27,7 +29,7 @@ def getMinigoWeightsV1(model):
          https://github.com/gcp/leela-zero/issues/2020
     """
     sess = tf.Session()
-    saver = tf.train.import_meta_graph(model+'.meta')
+    saver = tf.train.import_meta_graph(model + '.meta')
     saver.restore(sess, model)
 
     trainable_names = []
@@ -50,6 +52,7 @@ def getMinigoWeightsV1(model):
         weights_v2_format.append((w.name, nparray))
     return weights_v2_format
 
+
 def getMinigoWeightsV2(model):
     """Load and massage Minigo weights to Leela format.
 
@@ -62,7 +65,7 @@ def getMinigoWeightsV2(model):
 
     # count() overcounts by 3 from policy/value head and each layer has two convolutions.
     layers = (max([count for n, count in deduped(var_names)]) - 3) // 2
-    print (layers, 'layers')
+    print(layers, 'layers')
 
     has_conv_bias = any(matches(name, ('conv2d', 'bias')) for name in var_names.keys())
     if not has_conv_bias:
@@ -90,7 +93,7 @@ def getMinigoWeightsV2(model):
     weight_names = []
 
     def tensor_number(number):
-        return '' if number ==0 else '_' + str(number)
+        return '' if number == 0 else '_' + str(number)
 
     def add_conv(number, with_gamma=True):
         number = tensor_number(number)
@@ -125,9 +128,10 @@ def getMinigoWeightsV2(model):
         else:
             w = tf.train.load_variable(model, name)
 
-#        print ("{:45} {} {}".format(name, type(w), w.shape))
+        #        print ("{:45} {} {}".format(name, type(w), w.shape))
         weights.append((name, w))
     return weights
+
 
 def merge_gammas(weights):
     out_weights = []
@@ -137,13 +141,13 @@ def merge_gammas(weights):
             skip -= 1
             continue
 
-        if matches(name, ('conv2d', 'kernel')) and 'gamma' in weights[e+2][0]:
+        if matches(name, ('conv2d', 'kernel')) and 'gamma' in weights[e + 2][0]:
             kernel = w
-            bias = weights[e+1][1]
-            gamma = weights[e+2][1]
-            beta = weights[e+3][1]
-            mean = weights[e+4][1]
-            var = weights[e+5][1]
+            bias = weights[e + 1][1]
+            gamma = weights[e + 2][1]
+            beta = weights[e + 3][1]
+            mean = weights[e + 4][1]
+            var = weights[e + 5][1]
 
             new_kernel = kernel * np.reshape(gamma, (1, 1, 1, -1))
             new_bias = gamma * bias + beta * np.sqrt(var + 1e-5)
@@ -163,7 +167,7 @@ def merge_gammas(weights):
             if planes > 0:
                 w1 = np.reshape(w, [19, 19, planes, -1])
                 w2 = np.transpose(w1, [2, 0, 1, 3])
-                new_kernel = np.reshape(w2, [361*planes, -1])
+                new_kernel = np.reshape(w2, [361 * planes, -1])
                 out_weights.append(new_kernel)
             else:
                 out_weights.append(w)
@@ -171,6 +175,7 @@ def merge_gammas(weights):
             out_weights.append(w)
 
     return out_weights
+
 
 def save_leelaz_weights(filename, weights):
     with gzip.open(filename, 'wb') as f_out:
@@ -222,23 +227,24 @@ def main():
 
     model = sys.argv[1]
 
-    print ('loading ', model)
-    print ()
+    print('loading ', model)
+    print()
 
     # Can be used for v9 or before models.
     # weights = getMinigoWeightsV1(model)
     weights = getMinigoWeightsV2(model)
     if 0:
         for name, variables in [
-                ('load_checkpoint', var_names.keys()),
-        #        ('trainable_names', trainable_names),
-        #        ('global_variable', [v.name for v in tf.global_variables()])
-                ]:
-            print (name, len(variables))
-            print (deduped(variables))
-            print ()
+            ('load_checkpoint', var_names.keys()),
+            #        ('trainable_names', trainable_names),
+            #        ('global_variable', [v.name for v in tf.global_variables()])
+        ]:
+            print(name, len(variables))
+            print(deduped(variables))
+            print()
 
     save_leelaz_weights(model + '_converted.txt.gz', merge_gammas(weights))
+
 
 if __name__ == "__main__":
     main()
